@@ -5,8 +5,12 @@ import com.mongodb.*;
 import com.sun.corba.se.impl.orbutil.concurrent.Sync;
 import org.apache.felix.ipojo.annotations.*;
 import org.osgi.framework.BundleContext;
+import org.osgi.framework.ServiceRegistration;
+import org.wisdom.api.concurrent.ManagedFutureTask;
+import org.wisdom.api.concurrent.ManagedScheduledExecutorService;
 
 import java.net.UnknownHostException;
+import java.util.concurrent.*;
 
 /**
  * Created by jennifer on 3/26/15.
@@ -31,9 +35,13 @@ public class MongoDataBase {
     @Property(name="dbname")
     private String confMongoDB;
 
-
-
+    private DB db;
+    private ServiceRegistration<DB> reg;
     private final BundleContext bundleContext;
+
+    private final ScheduledExecutorService scheduler =
+            Executors.newScheduledThreadPool(1);
+
 
     public MongoDataBase(final BundleContext bundleContext) {
         this.bundleContext = bundleContext;
@@ -48,23 +56,48 @@ public class MongoDataBase {
 
     @Validate
     void start(){
-        System.out.println("I do stuff");
+        System.out.println("I do stuff" +reg);
+
+        //runs forever?
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                try{
+                    System.out.println("inside run");
+                    check();
+                    registerIfNeeded();
+
+                } catch(Exception e){
+                    unRegisterIfNeeded();
+                }
+            }
+        };
+
+
+        //comment this out to stop run
+        final ScheduledFuture<?> handler = scheduler.scheduleWithFixedDelay(runnable,1,1, TimeUnit.SECONDS);
+        System.out.println("after run" +reg);
         openMongoConnection();
         stop();
+        //doesnt stop?
+        handler.cancel(true);
+        System.out.println("grrrrr");
 
     }
 
     @Invalidate
     void stop(){
         System.out.println("I do nothing still");
+
+
     }
     private void openMongoConnection(){
         MongoClient mongoClient = null;
         try {
             mongoClient = new MongoClient(confHost);
-            DB db = mongoClient.getDB(confMongoDB);
+            db = mongoClient.getDB(confMongoDB);
             System.out.println(db.getCollectionNames());
-            System.out.println("info: "+db.requestEnsureConnection());
+
 
 
         } catch (UnknownHostException e) {
@@ -83,22 +116,22 @@ public class MongoDataBase {
 
     }
 
-    public void run(){
-        try{
-            check();
-            registerIfNeeded();
 
-        } catch(Exception e){
-            unRegisterIfNeeded();
+
+    private synchronized void unRegisterIfNeeded() {
+
+        if(reg!= null){
+            reg.unregister();
+            reg = null;
         }
-    }
-
-    private void unRegisterIfNeeded() {
 
     }
 
-    private void registerIfNeeded() {
-
+    private synchronized void registerIfNeeded() {
+        System.out.println("inside register");
+        if(reg == null){
+            reg=bundleContext.registerService(DB.class,db,null);
+        }
     }
 
     private void check() {
