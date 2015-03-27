@@ -22,9 +22,9 @@ import java.util.concurrent.TimeUnit;
  */
 @Component
 @Provides
-public class MongoDataBase {
+public class MongoDBClient {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(MongoDataBase.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(MongoDBClient.class);
 
     @Property(name = "hostname", mandatory = true)
     private String mongoDbHost;
@@ -43,7 +43,7 @@ public class MongoDataBase {
     private String mongoDbName;
     // TODO Add the set of collections.
     @Property(mandatory = false)
-    private DBCollection collectionSet;
+    private String[] dbCollectionSet;
 
     @Property(name = "heartbeat", value = "5")
     private long heartbeatPeriod;
@@ -63,7 +63,7 @@ public class MongoDataBase {
      *
      * @param bundleContext injected by ipojo.
      */
-    public MongoDataBase(final BundleContext bundleContext) {
+    public MongoDBClient(final BundleContext bundleContext) {
         this.bundleContext = bundleContext;
     }
 
@@ -104,7 +104,7 @@ public class MongoDataBase {
                         mongoClient.close();
                     }
                 } catch (Exception e) {
-                    // Ignored.
+                    LOGGER.debug("Shouldn't throw this ever",e);
                 }
             }
         });
@@ -118,16 +118,12 @@ public class MongoDataBase {
         mongoClient = null;
         //create a new mango client
         if (createAddress() != null && !createMongoCredential().isEmpty() && createMongoClientOptions() != null) {
-           // System.out.println("option 1");
-            mongoClient = new MongoClient(createAddress(), createMongoCredential(), createMongoClientOptions());
+                      mongoClient = new MongoClient(createAddress(), createMongoCredential(), createMongoClientOptions());
         } else if (createAddress() != null && createMongoCredential().isEmpty() && createMongoClientOptions() != null) {
-          //  System.out.println("option 2");
             mongoClient = new MongoClient(createAddress(), createMongoClientOptions());
         } else if (createAddress() != null && !createMongoCredential().isEmpty() && createMongoClientOptions() == null) {
-          //  System.out.println("option 3");
             mongoClient = new MongoClient(createAddress(), createMongoCredential());
         } else {
-          //  System.out.println("option 4");
             mongoClient = new MongoClient(createAddress());
         }
         //switch to correct db
@@ -174,7 +170,7 @@ public class MongoDataBase {
     }
 
     /**
-     * @return
+     * @return a list of MongoDB options, if they were set.
      */
     private MongoClientOptions createMongoClientOptions() {
         //TODO should be used with and journal options? if they still exsist.
@@ -227,10 +223,14 @@ public class MongoDataBase {
     }
 
     /**
-     * @return
+     * @return a list of properties associated with the Mongo Client
      */
     private Properties buildServiceProperty() {
-        // TODO Build a Properties object containing the host, port, and the set of collections.
+        Properties properties = new Properties();
+        properties.put("mongoDbHost", mongoDbHost);
+        properties.put("mongoDbPort", mongoDbPort);
+        properties.put("mongoDbName", mongoDbName);
+        properties.put("dbCollectionSet", dbCollectionSet);
         return new Properties();
     }
 
