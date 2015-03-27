@@ -1,16 +1,20 @@
 package org.wisdom.mongodb;
 
-import com.mongodb.*;
-
-import com.sun.corba.se.impl.orbutil.concurrent.Sync;
+import com.mongodb.DB;
+import com.mongodb.MongoClient;
+import org.apache.commons.io.IOUtils;
 import org.apache.felix.ipojo.annotations.*;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceRegistration;
-import org.wisdom.api.concurrent.ManagedFutureTask;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.wisdom.api.concurrent.ManagedScheduledExecutorService;
 
+import java.io.Closeable;
 import java.net.UnknownHostException;
-import java.util.concurrent.*;
+import java.util.Properties;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by jennifer on 3/26/15.
@@ -19,28 +23,38 @@ import java.util.concurrent.*;
 @Provides
 public class MongoDataBase {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(MongoDataBase.class);
 
-    @Property(name ="hostname",mandatory = true)
-    private  String confHost;
-    @Property(name ="confPort")
-    private  String confPort;
-    @Property(name ="confUser")
-    private  String confUser;
-    @Property(name ="confPwd")
-    private  String confPwd;
-    @Property(name ="confMongoSafe",value = "true")
-    private  boolean confMongoSafe;
-    @Property(name ="confMongoJ",value= "true")
-    private  boolean confMongoJ;
-    @Property(name="dbname")
+    @Property(name = "hostname", mandatory = true)
+    private String confHost;
+    @Property(name = "port")
+    private String confPort;
+    @Property(name = "user")
+    private String confUser;
+    @Property(name = "pwd")
+    private String confPwd;
+    //TODO Check these:
+    @Property(name = "confMongoSafe", value = "true")
+    private boolean confMongoSafe;
+    @Property(name = "confMongoJ", value = "true")
+    private boolean confMongoJ;
+
+    @Property(name = "name")
     private String confMongoDB;
 
-    private DB db;
+    // TODO Add the set of collections.
+
+    @Property(name = "heartbeat", value = "5")
+    private long heartbeatPeriod;
+
+    private DB database;
     private ServiceRegistration<DB> reg;
     private final BundleContext bundleContext;
 
-    private final ScheduledExecutorService scheduler =
-            Executors.newScheduledThreadPool(1);
+    @Requires(filter = "(name=" + ManagedScheduledExecutorService.SYSTEM + ")")
+    ManagedScheduledExecutorService executors;
+    private ScheduledFuture<?> heartbeat;
+    private MongoClient mongoClient;
 
 
     public MongoDataBase(final BundleContext bundleContext) {
@@ -49,118 +63,109 @@ public class MongoDataBase {
 
     }
 
-
-    protected void invalidate(){
-
-    }
-
     @Validate
-    void start(){
-        System.out.println("I do stuff" +reg);
+    void start() {
+        if (confMongoDB == null) {
+            // Use host and port
+            confMongoDB = confHost + ":" + confPort;
+        }
 
         //runs forever?
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                try{
-                    System.out.println("inside run");
-                    check();
+                System.out.println("inside run");
+                if (ping()) {
                     registerIfNeeded();
-
-                } catch(Exception e){
-                    unRegisterIfNeeded();
+                } else {
+                    unregisterIfNeeded();
                 }
             }
         };
 
-
         //comment this out to stop run
-        final ScheduledFuture<?> handler = scheduler.scheduleWithFixedDelay(runnable,1,1, TimeUnit.SECONDS);
-        System.out.println("after run" +reg);
-        openMongoConnection();
+        heartbeat = executors.scheduleAtFixedRate(runnable, 0l, heartbeatPeriod, TimeUnit.SECONDS);
+        System.out.println("after run" + reg);
         stop();
-        //doesnt stop?
-        handler.cancel(true);
         System.out.println("grrrrr");
 
     }
 
     @Invalidate
-    void stop(){
-        System.out.println("I do nothing still");
-
-
+    void stop() {
+        unregisterIfNeeded();
+        heartbeat.cancel(true);
+        IOUtils.closeQuietly(new Closeable() {
+            @Override
+            public void close() {
+                try {
+                    if (mongoClient != null) {
+                        mongoClient.close();
+                    }
+                } catch (Exception e) {
+                    // Ignored.
+                }
+            }
+        });
     }
-    private void openMongoConnection(){
-        MongoClient mongoClient = null;
+
+    private void openMongoConnection() {
+        mongoClient = null;
         try {
             mongoClient = new MongoClient(confHost);
-            db = mongoClient.getDB(confMongoDB);
-            System.out.println(db.getCollectionNames());
-
-
-
+            database = mongoClient.getDB(confMongoDB);
+            System.out.println(database.getCollectionNames());
         } catch (UnknownHostException e) {
             e.printStackTrace();
             System.out.println("SOMETHING HAS GONE WRONG");
         }
-     //   System.out.println("I AM HERE");
+        //   System.out.println("I AM HERE");
 
 
-      //  MongoClientOptions options = MongoClientOptions.builder().build();
-       // WriteConcern c = new WriteConcern();
+        //  MongoClientOptions options = MongoClientOptions.builder().build();
+        // WriteConcern c = new WriteConcern();
         //MongoClientURI uri = new MongoClientURI("");
-
-
 
 
     }
 
 
-
-    private synchronized void unRegisterIfNeeded() {
-
-        if(reg!= null){
+    private synchronized void unregisterIfNeeded() {
+        if (reg != null) {
             reg.unregister();
             reg = null;
         }
-
     }
 
     private synchronized void registerIfNeeded() {
         System.out.println("inside register");
-        if(reg == null){
-            reg=bundleContext.registerService(DB.class,db,null);
+
+        if (mongoClient == null) {
+            openMongoConnection();
+        }
+
+        if (reg == null) {
+            reg = bundleContext.registerService(DB.class, database, null);
         }
     }
 
-    private void check() {
+    private synchronized boolean ping() {
+        try {
+            if (mongoClient == null) {
+                return false;
+            }
+            mongoClient.getDatabaseNames();
+            return true;
+        } catch (Exception e) {
+            LOGGER.warn("Cannot connect to database {}:{}", confMongoDB, confPort, e);
+        }
 
+        return false;
     }
 
-    private void closeMongoConnection(){
-
+    private Properties buildServiceProperty() {
+        // TODO Build a Properties object containing the host, port, and the set of collections.
+        return new Properties();
     }
-
-    private void registerMongoService(){
-
-    }
-    private  void unregisterMongoService(){
-
-    }
-    private boolean checkMongoAvailability(){
-        //use runnable thrhead stuff from wisdom see docs
-        return Boolean.parseBoolean(null);
-    }
-
-    private void buildServiceProperty(){
-
-    }
-    private void address(){
-
-    }
-    private void getMongoConfigurationFromAgent(){}
-    private void extractMongoConfigurationFromNode(){}
-    private void safeClose(){}
 
 }
