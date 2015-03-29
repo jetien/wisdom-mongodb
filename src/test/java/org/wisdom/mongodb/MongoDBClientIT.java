@@ -47,6 +47,10 @@ public class MongoDBClientIT extends WisdomTest {
             col = db.createCollection("testCol", new BasicDBObject());
         }
         col.save(new BasicDBObject("testDoc", new Date()));
+
+        // Check datasource filter
+        db = osgi.waitForService(DB.class, "(datasources=test)", 5000);
+        assertThat(db).isNotNull();
     }
 
 }
