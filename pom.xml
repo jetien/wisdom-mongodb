@@ -30,6 +30,13 @@
 
     <packaging>wisdom</packaging>
 
+    <properties>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <maven.compiler.testSource>1.8</maven.compiler.testSource>
+        <maven.compiler.testTarget>1.8</maven.compiler.testTarget>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.wisdom-framework</groupId>
@@ -122,13 +129,6 @@
     <build>
         <plugins>
             <plugin>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
-                </configuration>
-            </plugin>
-            <plugin>
                 <groupId>com.github.joelittlejohn.embedmongo</groupId>
                 <artifactId>embedmongo-maven-plugin</artifactId>
                 <version>0.1.12</version>
@@ -138,8 +138,11 @@
                         <goals>
                             <goal>start</goal>
                         </goals>
+                        <phase>
+                            pre-integration-test
+                        </phase>
                         <configuration>
-                            <port>17177</port>
+                            <port>12345</port>
                             <version>2.6.1</version>
                             <databaseDirectory>${project.build.directory}/mongotest</databaseDirectory>
                             <bindIp>127.0.0.1</bindIp>
@@ -150,6 +153,9 @@
                         <goals>
                             <goal>stop</goal>
                         </goals>
+                        <phase>
+                            post-integration-test
+                        </phase>
                     </execution>
                 </executions>
             </plugin>

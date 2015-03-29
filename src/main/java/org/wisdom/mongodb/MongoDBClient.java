@@ -20,7 +20,6 @@ import java.util.concurrent.TimeUnit;
  * Component exposing {@link DB} services and responsible for the tracking of availability.
  */
 @Component
-@Provides
 public class MongoDBClient {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MongoDBClient.class);
@@ -42,7 +41,7 @@ public class MongoDBClient {
     //TODO Check these:
     @Property(name = "confMongoSafe", value = "true")
     boolean confMongoSafe;
-    @Property(name = "confMongoJ", value = "true")
+    @Property(name = "confMongoJ", value = "false")
     boolean confMongoJ;
 
     /**
@@ -128,7 +127,7 @@ public class MongoDBClient {
                 .autoConnectRetry(true)
                 .connectTimeout(5000)
                 .maxAutoConnectRetryTime(100)
-                .writeConcern(new WriteConcern(1, 0, false, true))
+                .writeConcern(new WriteConcern(1, 0, false, confMongoJ))
                 .build();
 
         if (credential != null) {
