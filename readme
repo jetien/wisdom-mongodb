@@ -1,3 +1,0 @@
-to create an instance of the ipojo component create a .cfg file in target/wisdom/applications
-the name must be theFullClassnameOfComponent-thenameyouchoose.cfg
-The purpose of this file is where you define all of the @paramater using the name="name" or using the name of the attribute it annotates.
