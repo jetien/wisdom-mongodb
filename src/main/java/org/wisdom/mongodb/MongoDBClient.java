@@ -1,7 +1,6 @@
 package org.wisdom.mongodb;
 
 import com.mongodb.*;
-import org.apache.commons.io.IOUtils;
 import org.apache.felix.ipojo.annotations.*;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceRegistration;
@@ -9,16 +8,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.wisdom.api.concurrent.ManagedScheduledExecutorService;
 
-import java.io.Closeable;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
+import java.util.Collections;
+import java.util.Dictionary;
+import java.util.Hashtable;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Created by jennifer on 3/26/15.
+ * Component exposing {@link DB} services and responsible for the tracking of availability.
  */
 @Component
 @Provides
@@ -26,34 +25,47 @@ public class MongoDBClient {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MongoDBClient.class);
 
+    // Connection information
+
     @Property(name = "hostname", mandatory = true)
-    private String mongoDbHost;
+    String mongoDbHost;
     @Property(name = "port")
-    private String mongoDbPort;
+    int mongoDbPort;
     @Property(name = "user")
-    private String mongDbUser;
+    String mongDbUser;
     @Property(name = "pwd")
-    private String mongoDbPwd;
+    String mongoDbPwd;
+    @Property(name = "dbname", mandatory = true)
+    String mongoDbName;
+
+
     //TODO Check these:
     @Property(name = "confMongoSafe", value = "true")
-    private boolean confMongoSafe;
+    boolean confMongoSafe;
     @Property(name = "confMongoJ", value = "true")
-    private boolean confMongoJ;
-    @Property(name = "dbname", mandatory = true)
-    private String mongoDbName;
-    // TODO Add the set of collections.
-    @Property(mandatory = false)
-    private String[] dbCollectionSet;
+    boolean confMongoJ;
 
+    /**
+     * The data source names to exposed alongside the service.
+     */
+    @Property(mandatory = false, name = "datasources")
+    String[] datasources;
+
+    /**
+     * The time period in second for the heatbeat checkng the availability of the mongodb server.
+     */
     @Property(name = "heartbeat", value = "5")
-    private long heartbeatPeriod;
-
-    private DB database;
-    private ServiceRegistration<DB> reg;
-    private final BundleContext bundleContext;
+    protected long heartbeatPeriod;
 
     @Requires(filter = "(name=" + ManagedScheduledExecutorService.SYSTEM + ")", proxy = false)
-    ManagedScheduledExecutorService executors;
+    ScheduledExecutorService executors;
+
+    protected DB database;
+
+    private ServiceRegistration<DB> reg;
+
+    private final BundleContext bundleContext;
+
     private ScheduledFuture<?> heartbeat;
     private MongoClient mongoClient;
 
@@ -72,21 +84,22 @@ public class MongoDBClient {
      */
     @Validate
     void start() {
-        openMongoConnection();
-        //runs forever?
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                if (ping()) {
-                    registerIfNeeded();
-                } else {
-                    unregisterIfNeeded();
+                try {
+                    if (ping()) {
+                        registerIfNeeded();
+                    } else {
+                        unregisterIfNeeded();
+                    }
+                } catch (Exception e) {
+                    LOGGER.error("Error while detecting the availability of {} ({})", mongoDbHost, mongoDbName, e);
                 }
             }
         };
-
+        // The first execution opens the connection if possible.
         heartbeat = executors.scheduleAtFixedRate(runnable, 0L, heartbeatPeriod, TimeUnit.SECONDS);
-        // stop();
     }
 
     /**
@@ -94,89 +107,67 @@ public class MongoDBClient {
      */
     @Invalidate
     void stop() {
-        unregisterIfNeeded();
+        // We must start by cancelling the heartbeat, as otherwise it could potentially re-register the service.
         heartbeat.cancel(true);
-        IOUtils.closeQuietly(new Closeable() {
-            @Override
-            public void close() {
-                try {
-                    if (mongoClient != null) {
-                        mongoClient.close();
-                    }
-                } catch (Exception e) {
-                    LOGGER.debug("Shouldn't throw this ever",e);
-                }
-            }
-        });
+        unregisterIfNeeded();
     }
 
     /**
      * Open a connection with a mongo database. 4 different configurations are currently available.
      */
     private void openMongoConnection() {
-        //TODO delete comments when finished
-        mongoClient = null;
-        //create a new mango client
-        if (createAddress() != null && !createMongoCredential().isEmpty() && createMongoClientOptions() != null) {
-                      mongoClient = new MongoClient(createAddress(), createMongoCredential(), createMongoClientOptions());
-        } else if (createAddress() != null && createMongoCredential().isEmpty() && createMongoClientOptions() != null) {
-            mongoClient = new MongoClient(createAddress(), createMongoClientOptions());
-        } else if (createAddress() != null && !createMongoCredential().isEmpty() && createMongoClientOptions() == null) {
-            mongoClient = new MongoClient(createAddress(), createMongoCredential());
-        } else {
-            mongoClient = new MongoClient(createAddress());
+        if (mongoClient != null) {
+            mongoClient.close();
+            mongoClient = null;
         }
-        //switch to correct db
-        database = mongoClient.getDB(mongoDbName);
-        LOGGER.info("Mongo Database Connection created for {}", database);
+        ServerAddress address = createAddress();
+        MongoCredential credential = createMongoCredential();
+
+        //TODO all the aspects should be configurable.
+        final MongoClientOptions options = MongoClientOptions.builder()
+                .autoConnectRetry(true)
+                .connectTimeout(5000)
+                .maxAutoConnectRetryTime(100)
+                .writeConcern(new WriteConcern(1, 0, false, true))
+                .build();
+
+        if (credential != null) {
+            mongoClient = new MongoClient(address, Collections.singletonList(credential), options);
+        } else {
+            mongoClient = new MongoClient(address, options);
+        }
+
+
     }
 
     /**
      * Per the documentation of Mongo API the UnknownHost Exception is deprecated and will be removed in the next driver.
      * we currently use driver 2.13.
      *
-     * @return
+     * @return the server address
      */
     private ServerAddress createAddress() {
-
         try {
-
-            if (mongoDbPort == null) {
+            if (mongoDbPort == 0) {
                 return new ServerAddress(mongoDbHost);
             }
-            //TODO could be an error is port isnt a number
-            return new ServerAddress(mongoDbHost, Integer.valueOf(mongoDbPort));
-
+            return new ServerAddress(mongoDbHost, mongoDbPort);
         } catch (UnknownHostException e) {
-            LOGGER.warn("Mongo DB Unknown Host Error {}:{}", mongoDbHost, mongoDbPort, e);
-
+            throw new IllegalArgumentException("Cannot connect to MongoDB server", e);
         }
-        //ugly
-        return null;
     }
 
     /**
      * Creates a MongoCredential instance with an unspecified mechanism.
      *
-     * @return
+     * @return the credential, {@code null} if not set
      */
-    private List<MongoCredential> createMongoCredential() {
-        List<MongoCredential> credList = new ArrayList<MongoCredential>();
-        if (mongDbUser != null && mongoDbPwd != null) {
-
-            credList.add(MongoCredential.createCredential(mongoDbName, mongoDbHost, mongoDbPwd.toCharArray()));
+    private MongoCredential createMongoCredential() {
+        if (mongDbUser != null) {
+            return MongoCredential.createMongoCRCredential(mongoDbName, mongoDbHost, mongoDbPwd.toCharArray());
         }
-        return credList;
-    }
-
-    /**
-     * @return a list of MongoDB options, if they were set.
-     */
-    private MongoClientOptions createMongoClientOptions() {
-        //TODO should be used with and journal options? if they still exsist.
         return null;
     }
-
 
     /**
      * Unregister the DB database service provided by this component.
@@ -186,18 +177,23 @@ public class MongoDBClient {
             reg.unregister();
             reg = null;
         }
+        if (mongoClient != null) {
+            mongoClient.close();
+            mongoClient = null;
+        }
+        database = null;
     }
 
     /**
-     * Register the DB database as a service of this component.
+     * Registers the DB database as a service of this component. If the connection is not open, it opens it.
      */
     private synchronized void registerIfNeeded() {
         if (mongoClient == null) {
             openMongoConnection();
         }
-
         if (reg == null) {
-            reg = bundleContext.registerService(DB.class, database, null);
+            reg = bundleContext.registerService(DB.class, database,
+                    buildServiceProperty());
         }
     }
 
@@ -207,31 +203,32 @@ public class MongoDBClient {
      * @return true if the connection is still alive, otherwise return false.
      */
     private synchronized boolean ping() {
-
         try {
-
             if (mongoClient == null) {
-                return false;
+                openMongoConnection();
             }
             mongoClient.getDatabaseNames();
+            if (database == null) {
+                database = mongoClient.getDB(mongoDbName);
+            }
             return true;
         } catch (Exception e) {
             LOGGER.warn("Cannot connect to database {} at {}:{}", mongoDbName, mongoDbHost, mongoDbPort, e);
         }
-
         return false;
     }
 
     /**
      * @return a list of properties associated with the Mongo Client
      */
-    private Properties buildServiceProperty() {
-        Properties properties = new Properties();
-        properties.put("mongoDbHost", mongoDbHost);
-        properties.put("mongoDbPort", mongoDbPort);
-        properties.put("mongoDbName", mongoDbName);
-        properties.put("dbCollectionSet", dbCollectionSet);
-        return new Properties();
+    private Dictionary<String, ?> buildServiceProperty() {
+        Dictionary<String, Object> properties = new Hashtable<>();
+        properties.put("host", mongoDbHost);
+        properties.put("port", mongoDbPort);
+        properties.put("name", mongoDbName);
+        properties.put("datasources", datasources);
+        LOGGER.info("Props " + properties);
+        return properties;
     }
 
 }
