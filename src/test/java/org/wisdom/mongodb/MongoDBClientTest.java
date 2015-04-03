@@ -72,6 +72,7 @@ public class MongoDBClientTest {
         client.mongoDbName = "wisdom-test";
         client.heartbeatPeriod = 1;
         client.datasources = new String[0];
+        client.connectionsPerHost = 2;
         client.start();
         await().atMost(5, TimeUnit.SECONDS).until(() -> client.database != null);
         assertThat(client.database).isNotNull();
@@ -91,6 +92,7 @@ public class MongoDBClientTest {
         client.mongoDbPort = port;
         client.mongoDbName = "wisdom-test";
         client.heartbeatPeriod = 3;
+        client.connectionsPerHost = 2;
         client.datasources = new String[] {"cat", "dog"};
         client.start();
 

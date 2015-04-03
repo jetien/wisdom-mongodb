@@ -31,7 +31,7 @@ mongodb {
 }
 ````
 
-Under `mongodb` you can add several element to configure several mongodb servers / databases.
+Under `mongodb` you can add several elements to configure several mongodb servers / databases.
 
 ## Configuration using `cfg` files
 
@@ -46,7 +46,7 @@ dbname: kitten
 
 ## Using MongoDB
 
-For each instantiate client, a `com.mongodb.DB` is exposed. This service is only exposed if the database is available
+For each instantiated client, a `com.mongodb.DB` is exposed. This service is only exposed if the database is available
 . A heartbeat is setup to track the availability. If the service is exposed, it means that the connection has been 
 established and should work.
  
@@ -73,3 +73,47 @@ DB localhost;
 ## Configuration Property
 
 TODO
+These are the different Mongo Client options you can configure:
+
+
+###description
+
+Sets the description of the Mongo Client takes a string.
+
+###connectionsPerHost
+
+Sets the maximum number of connections per host, takes an integer, must be greater than 1, default is 2.
+
+###threadsAllowedToBlockForConnectionMultiplier
+
+Sets the multiplier for number of threads allowed to block waiting for a connection. Takes an integer that must be greater than 0.
+
+
+###maxWaitTime
+Sets the maximum time that a thread will block waiting for a connection. Takes an integer that cannot be less than 0.
+
+
+###connectTimeout
+Sets the connection timeout. Takes an integer, that cannot be less than 0.
+
+###autoConnectRetry
+Sets whether auto connect retry is enabled, takes a boolean true or false.
+
+###maxAutoConnectRetryTime
+Sets the maximum auto connect retry time, takes an integer.
+
+###writeConcern
+Sets the write concern.
+individual params:
+WriteConcern(int w, int wtimeout, boolean fsync, boolean j)
+
+###socketTimeout
+Sets the socket timeout.
+
+###socketKeepAlive
+Sets whether socket keep alive is enabled.
+
+###socketFactory
+Sets the socket factory.
+
+

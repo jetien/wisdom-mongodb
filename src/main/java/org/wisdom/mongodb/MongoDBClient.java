@@ -43,6 +43,27 @@ public class MongoDBClient {
     boolean confMongoSafe;
     @Property(name = "confMongoJ", value = "false")
     boolean confMongoJ;
+    @Property(name = "confMongoFsync", value = "false")
+    boolean confMongoFsync;
+    @Property(name = "confMongoW", value = "1")
+    int confMongoW;
+    @Property(name = "confMongoWTimeout", value = "0")
+    int confMongoWTimeout;
+
+    @Property(name = "autoConnectRetry", value = "true")
+    boolean autoConRetry;
+    @Property(name="connectTimeout", value="5000")
+    int connectTimeout;
+    @Property(name="maxAutoConnectRetryTime", value="100")
+    int maxAutoConnectRetryTime;
+    @Property(name="connectionsPerHost", value="2")
+    int connectionsPerHost;
+    @Property(name="descripption")
+    String description;
+    @Property (name="maxWaitTime" ,value="5000")
+    int maxWaitTime;
+
+
 
     /**
      * The data source names to exposed alongside the service.
@@ -124,10 +145,13 @@ public class MongoDBClient {
 
         //TODO all the aspects should be configurable.
         final MongoClientOptions options = MongoClientOptions.builder()
-                .autoConnectRetry(true)
-                .connectTimeout(5000)
-                .maxAutoConnectRetryTime(100)
-                .writeConcern(new WriteConcern(1, 0, false, confMongoJ))
+                .autoConnectRetry(autoConRetry)
+                .connectTimeout(connectTimeout)
+                .maxAutoConnectRetryTime(maxAutoConnectRetryTime)
+                .writeConcern(new WriteConcern(confMongoW, confMongoWTimeout, confMongoFsync, confMongoJ))
+                .connectionsPerHost(connectionsPerHost)
+                .description(description)
+                .maxWaitTime(maxWaitTime)
                 .build();
 
         if (credential != null) {
@@ -141,7 +165,7 @@ public class MongoDBClient {
 
     /**
      * Per the documentation of Mongo API the UnknownHost Exception is deprecated and will be removed in the next driver.
-     * we currently use driver 2.13.
+     * we currently use driver 2.13.0
      *
      * @return the server address
      */
