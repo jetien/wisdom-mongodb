@@ -8,7 +8,7 @@ Add the following dependency to your `pom.xml` file:
 
 ````
 <dependency>
-  <groupId>org.wisdom-framework</groupId>
+  <groupId>org.wisdom-framework.mongo</groupId>
   <artifactId>wisdom-mongodb</artifactId>
   <version>1.0-SNAPSHOT</version>
 </dependency>
@@ -72,7 +72,6 @@ DB localhost;
 
 ## Configuration Property
 
-TODO
 These are the different Mongo Client options you can configure:
 
 
