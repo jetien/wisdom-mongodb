@@ -1,0 +1,23 @@
+{
+    "name": "wisdom-mongodb",
+    "version":"1.0-SNAPSHOT",
+    "description": "Wisdom MongoDB integration.",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/wisdom-framework/wisdom-mongodb"
+    },
+
+    "author": "The Wisdom Team",
+    "license": {
+            "type": "Apache",
+            "url": "https://github.com/wisdom-framework/wisdom-mongodb/blob/master/LICENSE.txt"
+        },
+    "homepage": "https://github.com/wisdom-framework/wisdom-mongodb",
+    "keywords": [
+        "mongo",
+        "db",
+        "nosql",
+        "documentdb",
+        "document-orienteddb"
+    ]
+}
