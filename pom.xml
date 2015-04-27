@@ -36,6 +36,37 @@
 
     <packaging>wisdom</packaging>
 
+    <name>Wisdom MongoDB</name>
+    <description>MongoDB integration in Wisdom Framework</description>
+    <url>https://github.com/wisdom-framework/wisdom-mongodb</url>
+    <issueManagement>
+        <system>github</system>
+        <url>https://github.com/wisdom-framework/wisdom-mongodb/issues</url>
+    </issueManagement>
+    <developers>
+        <developer>
+            <id>jenf11</id>
+            <name>Jennifer Fry</name>
+            <email>jenfry11[AT]gmail[DOT]com</email>
+            <url>https://github.com/jenf11</url>
+        </developer>
+
+        <developer>
+            <id>cescoffier</id>
+            <name>Clement Escoffier</name>
+            <email>clement[AT]apache[DOT].org</email>
+            <url>https://github.com/cescoffier</url>
+        </developer>
+    </developers>
+
+    <inceptionYear>2015</inceptionYear>
+
+    <scm>
+        <url>https://github.com/wisdom-framework/wisdom-mongodb</url>
+        <connection>scm:git:git@github.com:wisdom-framework/wisdom-mongodb.git</connection>
+        <developerConnection>scm:git:git@github.com:wisdom-framework/wisdom-mongodb.git</developerConnection>
+    </scm>
+
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
